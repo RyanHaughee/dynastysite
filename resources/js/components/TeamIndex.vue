@@ -68,6 +68,7 @@
                 let response = await axios.get('/league/'+this.leagueId)
                 if (response.data && response.data.success && response.data.league)
                 {
+                    console.log("getting league");
                     this.league = JSON.parse(response.data.league);
                     this.getTeams();
                 }
