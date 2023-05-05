@@ -230,6 +230,7 @@ class SleeperAPIController extends Controller
             // Map playerIds to each team
             foreach($roster['players'] as $playerId)
             {
+                Log::info($playerId);
                 $player = SleeperPlayer::where('sleeper_player_id',$playerId)->first();
                 if ($player->position == "K" || $player->position == "DEF")
                 {
