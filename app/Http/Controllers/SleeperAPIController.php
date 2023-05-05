@@ -149,14 +149,13 @@ class SleeperAPIController extends Controller
     public function importAllPlayers()
     {
         // comment this out to actually fetch the players
-        return true;
+        // return true;
 
         // Get player info from Sleeper
         $response = Http::get("https://api.sleeper.app/v1/players/nfl");
 
         // Log::info($response);
         $players = json_decode($response, true);
-        var_dump($players);
         $playerColumns = SleeperPlayer::getSleeperTableColumns(); 
 
         foreach ($players as $playerId => $player)
@@ -186,6 +185,8 @@ class SleeperAPIController extends Controller
             }
             $newPlayer->save();
         }
+
+        return "SUCCESS!";
 
     }
 
