@@ -42,6 +42,7 @@ class TeamController extends Controller
             $team_value = $team->getTeamValue();
 
             $picks = SleeperDraftPick::where('team_id',$team->id)->orderby('round','asc')->get();
+            $team->draft_picks = json_encode($picks);
             $draftValue = SleeperTeam::computeDraftValue($picks);
             $team_value["draft"] = $draftValue;
             $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];

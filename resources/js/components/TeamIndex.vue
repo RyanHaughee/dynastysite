@@ -35,7 +35,8 @@
                     <div class="row" style="margin-top:30px">
                         <label>Sleeper League Id</label>
                         <input v-model="leagueId" type="text" />
-                        <button class="btn btn-primary" style="margin-top:10px" @click="setupLeague()">Refresh</button>
+                        <button v-if="!newLeagueLoading" class="btn btn-primary" style="margin-top:10px" @click="setupLeague()">Refresh</button>
+                        <div v-if="newLeagueLoading" class="spinner-border" role="status" style="margin:auto; margin-top:10px"></div>
                     </div>
                 </div>
             </div>
@@ -57,7 +58,8 @@
                 leagueId: "918238038646636544",
                 league: null,
                 teams: null,
-                expandedTeamId: null
+                expandedTeamId: null,
+                newLeagueLoading: false
             }
         },
         mounted() {
@@ -68,7 +70,6 @@
                 let response = await axios.get('/league/'+this.leagueId)
                 if (response.data && response.data.success && response.data.league)
                 {
-                    console.log("getting league");
                     this.league = JSON.parse(response.data.league);
                     this.getTeams();
                 }
@@ -87,9 +88,11 @@
                 this.expandedTeamId = team_id;
             },
             async setupLeague() {
+                this.newLeagueLoading = true;
                 let response = await axios.get('/setup/league/'+this.leagueId);
                 if (response.data && response.data.success)
                 {
+                    this.newLeagueLoading = false;
                     this.getLeague();
                 }
                 

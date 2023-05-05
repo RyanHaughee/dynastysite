@@ -149,7 +149,7 @@ class SleeperAPIController extends Controller
     public function importAllPlayers()
     {
         // comment this out to actually fetch the players
-        // return true;
+        return true;
 
         // Get player info from Sleeper
         $response = Http::get("https://api.sleeper.app/v1/players/nfl");

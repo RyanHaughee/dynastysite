@@ -30,6 +30,7 @@
                                 <div class="col-sm-12">
                                     <div class="container">
                                         <div class="row">
+                                            <h4 style="">Players</h4>
                                             <div v-for="(player_arr, pos) in team.players" :key="player_arr.id" class="col-sm-3">
                                                 <div v-for="player in player_arr" :style="{ color: positions[pos] }" :key="player.id" style="font-size:16px; font-weight:500">
                                                     {{ player.full_name }} 
