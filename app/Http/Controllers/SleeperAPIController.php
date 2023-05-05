@@ -23,19 +23,19 @@ class SleeperAPIController extends Controller
 
     public function setupLeague($leagueId)
     {
-        try {
+        // try {
             $this->importLeague($leagueId);
             $this->importTeamsFromLeague($leagueId);
             $this->importTeamInfo($leagueId);
             $this->importDraftPicks($leagueId);
-        } catch (\Exception $e)
-        {
-            $response = [
-                "success" => false,
-                "message" => $e->getMessage()
-            ];
-            return $response;
-        }
+        // } catch (\Exception $e)
+        // {
+        //     $response = [
+        //         "success" => false,
+        //         "message" => $e->getMessage()
+        //     ];
+        //     return $response;
+        // }
         
         return ["success" => true];
 
