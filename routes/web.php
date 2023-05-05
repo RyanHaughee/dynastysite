@@ -19,14 +19,6 @@ use App\Http\Controllers\SleeperAPIController;
 */
 
 Route::get('/', function () {
-    return view('welcome');
-});
-
-Route::get('/home', function () {
-    return view('home');
-});
-
-Route::get('/test', function () {
     return view('test');
 });
 
