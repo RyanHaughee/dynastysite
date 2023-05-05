@@ -165,25 +165,25 @@ class SleeperAPIController extends Controller
             {
                 $newPlayer = new SleeperPlayer;
                 $newPlayer->sleeper_player_id = $playerId;
-            }
 
-            foreach($playerColumns as $column)
-            {
-                if (empty($player[$column]))
+                foreach($playerColumns as $column)
                 {
-                    $newPlayer->$column = null;
-                } else {
-                    if(is_string($player[$column]) || is_integer($player[$column]))
+                    if (empty($player[$column]))
                     {
-                        $newPlayer->$column = $player[$column];
-                    }
-                    else 
-                    {
-                        $newPlayer->$column = json_encode($player[$column]);
+                        $newPlayer->$column = null;
+                    } else {
+                        if(is_string($player[$column]) || is_integer($player[$column]))
+                        {
+                            $newPlayer->$column = $player[$column];
+                        }
+                        else 
+                        {
+                            $newPlayer->$column = json_encode($player[$column]);
+                        }
                     }
                 }
+                $newPlayer->save();
             }
-            $newPlayer->save();
         }
 
         return "SUCCESS!";
