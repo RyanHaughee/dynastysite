@@ -54,13 +54,14 @@
         components: { TeamPage },
         data() {
             return {
-                leagueId: "919645226199875584",
+                leagueId: "918238038646636544",
                 league: null,
                 teams: null,
                 expandedTeamId: null
             }
         },
         mounted() {
+            this.getLeague();
         },
         methods: {
             async getLeague() {
