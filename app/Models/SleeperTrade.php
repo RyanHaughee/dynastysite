@@ -43,8 +43,6 @@ class SleeperTrade extends Model
         $trade_value[$this->team1_roster_id]["before"]["draft"] = SleeperTeam::computeDraftValue($team1_picks);
         $trade_value[$this->team2_roster_id]["before"]["draft"] = SleeperTeam::computeDraftValue($team2_picks);
 
-        Log::info($trade_value);
-
 
         // $pieces = SleeperTradePiece::where("trade_id",$this->id)->get();
         // foreach($pieces as $piece)

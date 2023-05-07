@@ -49,12 +49,6 @@ class LeagueController extends Controller
         
         $teams = $league->getLeagueTeams();
 
-        foreach ($teams as $team)
-        {
-            $team_value = $team->getTeamValue();
-            $team->value = json_encode($team_value);
-        }
-
         return [
             "success" => true,
             "teams" => json_encode($teams)
@@ -63,31 +57,48 @@ class LeagueController extends Controller
 
     // **************************************************** //
     // **** Should only be called once for each league **** //
+    // ****** TODO: Create a way to cross-check this ****** //
     // **************************************************** //
-    public static function createFutureDraftPicks($league_id)
+    public static function createFutureDraftPicks($league_id, $max_year)
     {
-        // return;
         $league = SleeperLeague::where('sleeper_league_id',$league_id)->first();
+
+        $pickCheck = SleeperDraftPick::where('league_id',$league->id)
+            ->where('year',$max_year)
+            ->count();
+
+        if ($pickCheck > 0)
+        {
+            return;
+        }
+
         $teams = SleeperTeam::where('sleeper_league_id',$league_id)->get();
 
         $year = 2024;
-        while ($year <= 2025)
+        while ($year <= $max_year)
         {
-            $round = 1;
-            while ($round <= 3)
-            {
-                foreach($teams as $team)
-                {
-                    $draftpick = new SleeperDraftPick;
-                    $draftpick->league_id = $league->id;
-                    $draftpick->round = $round;
-                    $draftpick->team_id = $team->id;
-                    $draftpick->original_owner_id = $team->id;
-                    $draftpick->year = $year;
-                    $draftpick->save();
-                }
-                $round++;
+            $needToUploadPicksCheck = SleeperDraftPick::where("league_id",$league->id)
+                ->where("year", $max_year)
+                ->first();
 
+            if (empty($needToUploadPicksCheck))
+            {
+                $round = 1;
+                while ($round <= 3)
+                {
+                    foreach($teams as $team)
+                    {
+                        $draftpick = new SleeperDraftPick;
+                        $draftpick->league_id = $league->id;
+                        $draftpick->round = $round;
+                        $draftpick->team_id = $team->id;
+                        $draftpick->original_owner_id = $team->id;
+                        $draftpick->year = $year;
+                        $draftpick->save();
+                    }
+                    $round++;
+
+                }
             }
             $year++;
         }

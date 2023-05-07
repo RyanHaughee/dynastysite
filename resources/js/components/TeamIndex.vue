@@ -5,42 +5,45 @@
     margin:0;
     border-radius: 0;
 }
-
-.team-card:hover { 
-    background-color: #36A2EB !important;
-}
-
-.team-tab {
-    padding:5px !important;
+.team-card:hover { background-color: #36A2EB !important; }
+.team-tab { padding:5px !important;}
+.team-logo {max-width:50px}
+.top-margin-30 {margin-top:30px}
+.margin-center {margin:auto; margin-top:10px}
+.btn-style {
+    margin: 1%; 
+    margin-top:10px;
+    width: 48%
 }
 </style>
 
 <template>
     <div class="container">
         <div class="row">
-            <div class="col-md-3 justify-content-center">
+            <div class="col-md-3 order-md-12 justify-content-center">
                 <div class="container">
                     <div v-for="team in teams" :key="team.id" class="row">
                         <div class="card team-card" @click="setExpandedTeamId(team.id)">
                             <div class="card-body team-tab">
                                 <div class="container">
                                     <div class="row">
-                                        <img v-if="team.team_logo" :src="team.team_logo" style="max-width:50px"/>
+                                        <img class="team-logo" v-if="team.team_logo" :src="team.team_logo" />
                                         {{ team.team_name }}
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="row" style="margin-top:30px">
+                    <div class="row top-margin-30">
                         <label>Sleeper League Id</label>
                         <input v-model="leagueId" type="text" />
-                        <button v-if="!newLeagueLoading" class="btn btn-primary" style="margin-top:10px" @click="setupLeague()">Refresh</button>
-                        <div v-if="newLeagueLoading" class="spinner-border" role="status" style="margin:auto; margin-top:10px"></div>
+                        <button v-if="!newLeagueLoading" class="btn btn-primary btn-style" @click="setupLeague()">Refresh</button>
+                        <button v-if="!newLeagueLoading" class="btn btn-secondary btn-style" @click="getLeague()">Load</button>
+                        <div v-if="newLeagueLoading" class="spinner-border margin-center" role="status"></div>
                     </div>
                 </div>
             </div>
-            <div v-if="expandedTeamId" class="justify-content-center col-md-9">
+            <div v-if="expandedTeamId" class="col-md-9 order-md-1 justify-content-center ">
                 <TeamPage :team_id="expandedTeamId"/>
             </div>
         </div>
@@ -79,9 +82,6 @@
                 if (response.data && response.data.success && response.data.teams)
                 {
                     this.teams = JSON.parse(response.data.teams);
-                    this.teams.forEach(team => {
-                        team.value = JSON.parse(team.value);
-                    })
                 }
             },
             setExpandedTeamId(team_id) {

@@ -11,6 +11,11 @@ class SleeperLeague extends Model
 {
     use HasFactory;
 
+    // **************************************************** //
+    // ** These columns are the columns to be set from  *** //
+    // ****************** Sleeper API  ******************** //
+    // **************************************************** //
+
     public static function getTableColumns()
     {
         $columns = [

@@ -10,11 +10,20 @@ use Illuminate\Support\Facades\Log;
 
 class TeamController extends Controller
 {
+
+    // **************************************************** //
+    // ******** Model function to get team value ********** //
+    // **************************************************** //
+
     public function getTeamValue($team_id)
     {
         $team = SleeperTeam::find($team_id);
         $team->getTeamValue();
     }
+
+    // **************************************************** //
+    // ********* Grabs players and roster value *********** //
+    // **************************************************** //
 
     public function getExpandedTeamData($team_id)
     {
@@ -43,6 +52,7 @@ class TeamController extends Controller
 
             $picks = SleeperDraftPick::where('team_id',$team->id)->orderby('round','asc')->get();
             $team->draft_picks = json_encode($picks);
+
             $draftValue = SleeperTeam::computeDraftValue($picks);
             $team_value["draft"] = $draftValue;
             $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
@@ -59,14 +69,5 @@ class TeamController extends Controller
             "success" => true,
             "team" => $team
         ];
-    }
-
-    public function pickValueCalculation($league_id)
-    {
-        $picks = SleeperDraftPick::where('round',1)
-            ->where('pick',1)
-            ->where('league_id',1)
-            ->get();
-        $draftValue = SleeperTeam::computeDraftValue($picks);
     }
 }

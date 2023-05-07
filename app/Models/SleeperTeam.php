@@ -157,10 +157,8 @@ class SleeperTeam extends Model
 
     public static function computeDraftValue($picks)
     {
-        $pickValue = [];
-        $pickValue["total"] = [
-            "count" => 0,
-            "value" => 0
+        $pickValue = [
+            "total" => ["count" => 0, "value" => 0]
         ];
 
         // create future picks array
@@ -188,14 +186,13 @@ class SleeperTeam extends Model
         {
             if (!isset($pickValue[$pick->year]))
             {
-                $pickValue[$pick->year] = [
-                    "count" => 0,
-                    "value" => 0
-                ];
+                $pickValue[$pick->year] = ["count" => 0, "value" => 0];
             }
 
             $pickValue[$pick->year]["count"] += 1;
             $pickValue["total"]["count"] += 1;
+
+            $pick_year_value = ($pick->year > 2025) ? 2025 : $pick->year;
 
             // Get pick value
             if (!empty($pick->pick))
@@ -217,34 +214,35 @@ class SleeperTeam extends Model
                     ->whereNotNull("pick")
                     ->first();
 
+                // $yearConversion -- value used to average out pick value
+                // $valueToAverage -- pick number + $yearConversion
+
                 $yearConversion = (($pick->year)-2023)*(6+(($pick->round-1)*12));
                 $valueToAverage = $yearConversion + ($teamComparable->pick + (($teamComparable->round-1)*12));
                 $pick_value = $valueToAverage / (($pick->year)-2022);
 
                 $value = 0;
+                $roundAdj = 12*($pick->round-1);
                 if ($pick_value < 6.5 || ($pick_value >= 10.5 && $pick_value < 18.5) || ($pick_value >= 22.5 && $pick_value < 30.5))
                 {
-                    $roundAdj = 12*($pick->round-1);
                     $distanceFromEarly = abs($pick_value - (2.5+$roundAdj));
                     $weight = (4-$distanceFromEarly) / 4;
 
-                    $value = $value + ($future_pick_value_arr[$pick->year." Early ".$verbiage[$pick->round]] * $weight);
+                    $value = $value + ($future_pick_value_arr[$pick_year_value." Early ".$verbiage[$pick->round]] * $weight);
                 }
                 if ($pick_value >= 2.5 && $pick_value < 10.5 || ($pick_value >= 14.5 && $pick_value < 22.5) || ($pick_value >= 26.5 && $pick_value < 34.5))
                 {
-                    $roundAdj = 12*($pick->round-1);
                     $distanceFromMid = abs($pick_value - (6.5+$roundAdj));
                     $weight = (4-$distanceFromMid) / 4;
 
-                    $value = $value + ($future_pick_value_arr[$pick->year." Mid ".$verbiage[$pick->round]] * $weight);
+                    $value = $value + ($future_pick_value_arr[$pick_year_value." Mid ".$verbiage[$pick->round]] * $weight);
                 }
                 if ($pick_value >= 6.5 && $pick_value < 14.5 || ($pick_value >= 18.5 && $pick_value < 26.5) || ($pick_value >= 30.5))
                 {
-                    $roundAdj = 12*($pick->round-1);
                     $distanceFromLate = abs($pick_value - (10.5+$roundAdj));
                     $weight = (4-$distanceFromLate) / 4;
 
-                    $value = $value + ($future_pick_value_arr[$pick->year." Late ".$verbiage[$pick->round]] * $weight);
+                    $value = $value + ($future_pick_value_arr[$pick_year_value." Late ".$verbiage[$pick->round]] * $weight);
                 }
             }
 

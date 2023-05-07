@@ -23,22 +23,21 @@ class SleeperAPIController extends Controller
 
     public function setupLeague($leagueId)
     {
-        // try {
+        try {
             $this->importLeague($leagueId);
             $this->importTeamsFromLeague($leagueId);
             $this->importTeamInfo($leagueId);
             $this->importDraftPicks($leagueId);
-        // } catch (\Exception $e)
-        // {
-        //     $response = [
-        //         "success" => false,
-        //         "message" => $e->getMessage()
-        //     ];
-        //     return $response;
-        // }
+        } catch (\Exception $e)
+        {
+            $response = [
+                "success" => false,
+                "message" => $e->getMessage()
+            ];
+            return $response;
+        }
         
         return ["success" => true];
-
     }
 
     // **************************************************** //
@@ -231,7 +230,6 @@ class SleeperAPIController extends Controller
             // Map playerIds to each team
             foreach($roster['players'] as $playerId)
             {
-                Log::info($playerId);
                 $player = SleeperPlayer::where('sleeper_player_id',$playerId)->first();
                 if ($player->position == "K" || $player->position == "DEF")
                 {
@@ -264,8 +262,8 @@ class SleeperAPIController extends Controller
 
     public function importDraftPicks($leagueId)
     {
-
         $league = SleeperLeague::where('sleeper_league_id',$leagueId)->first();
+        $in_season = $league->status == "in_season" ?? false;
 
         // Get draft pick info from Sleeper
         $response = Http::get("https://api.sleeper.app/v1/draft/".$league->sleeper_draft_id);
@@ -297,29 +295,36 @@ class SleeperAPIController extends Controller
                     $draftpick->original_owner_id = $team->id;
                     $draftpick->year = 2023;
                     $draftpick->save();
+                } else {
+                    if ($in_season)
+                    {
+                        $draftpick->team_id = 0;
+                        $draftpick->save();
+                    }
                 }
                 $round++;
             }
         }
 
         // If needed, get the new picks
+        $year = $in_season ? 2026 : 2025;
+
         $needToUploadPicksCheck = SleeperDraftPick::where("league_id",$league->id)
-                ->where("year", 2024)
+                ->where("year", $year)
                 ->first();
         
         if (empty($needToUploadPicksCheck))
         {
-            LeagueController::createFutureDraftPicks($leagueId);
+            LeagueController::createFutureDraftPicks($leagueId, $year);
         }
 
         // backfill the traded picks
         $response = Http::get("https://api.sleeper.app/v1/league/".$league->sleeper_league_id."/traded_picks");
         $traded_picks = json_decode($response, true);
 
-        Log::info($traded_picks);
-
         foreach($traded_picks as $pick)
         {
+            if ($pick)
             $originalOwner = SleeperTeam::where("roster_id", $pick["roster_id"])
                 ->where('league_id',$league->id)
                 ->first();  

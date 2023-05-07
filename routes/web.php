@@ -36,7 +36,6 @@ Route::get('/league/create-draft-picks/{league_id}', [LeagueController::class, '
 
 Route::get('/team/value/{team_id}', [TeamController::class, 'getTeamValue']);
 Route::get('/team/value/expanded/{team_id}', [TeamController::class, 'getExpandedTeamData']);
-Route::get('/team/value/picks/{league_id}', [TeamController::class, 'pickValueCalculation']);
 
 
 Route::get('/trade/score/{trade_id}', [TradeController::class, 'getTradeScore']);
