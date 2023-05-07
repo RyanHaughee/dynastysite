@@ -324,7 +324,6 @@ class SleeperAPIController extends Controller
 
         foreach($traded_picks as $pick)
         {
-            if ($pick)
             $originalOwner = SleeperTeam::where("roster_id", $pick["roster_id"])
                 ->where('league_id',$league->id)
                 ->first();  

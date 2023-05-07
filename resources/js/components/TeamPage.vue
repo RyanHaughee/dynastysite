@@ -2,7 +2,7 @@
     .team-nav {margin-bottom:10px; cursor:pointer}
     .team-nav-text {display: inline; margin-left: 5px}
     .true-center{text-align:center;margin: auto}
-    .team-logo{max-height:200px}
+    .team-logo-expanded {max-height:200px}
     .doughnut-size{max-height:250px}
     .player-text{font-size:16px; font-weight:500}
 </style>
@@ -20,7 +20,7 @@
                         <div class="container">
                             <div class="row">
                                 <div class="col-sm-4 true-center">
-                                    <img v-if="team.team_logo" :src="team.team_logo" class="team-logo"/>
+                                    <img v-if="team.team_logo" :src="team.team_logo" class="team-logo-expanded"/>
                                 </div>
                                 <div class="col-sm-4">
                                     <Doughnut
