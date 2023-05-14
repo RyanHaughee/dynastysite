@@ -67,7 +67,6 @@
 
     // this is must have
     import { library } from '@fortawesome/fontawesome-svg-core';
-    import {  } from "@fortawesome/free-regular-svg-icons";
     import { faStar, faGem, faTrashCan } from "@fortawesome/free-solid-svg-icons";
     library.add(faGem, faStar, faTrashCan)
 
@@ -78,6 +77,7 @@
             team_id: function() {
                 this.chartReady = false;
                 this.getExpandedTeamData();
+                console.log("calling function2");
             }
         },
         data() {
@@ -104,9 +104,11 @@
         },
         mounted() {
             this.getExpandedTeamData();
+            console.log("calling function1");
         },
         methods: {
             async getExpandedTeamData() {
+                console.log("function called");
                 let response = await axios.get('/team/value/expanded/'+this.team_id);
                 if (response && response.data && response.data.success)
                 {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SleeperTeam;
+use App\Models\SleeperDraft;
 use App\Models\SleeperTrade;
 use Illuminate\Http\Request;
 use App\Models\SleeperLeague;
@@ -10,8 +11,10 @@ use App\Models\SleeperPlayer;
 use App\Models\SleeperDraftPick;
 use App\Models\MatchPlayerToTeam;
 use App\Models\SleeperTradePiece;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Schema;
 
 class SleeperAPIController extends Controller
@@ -251,8 +254,11 @@ class SleeperAPIController extends Controller
                 $matchPlayerToTeam->active = 1;
                 $matchPlayerToTeam->save();
             }
-        }
 
+            // Invalidate the redis cache
+            Redis::del("expandedteam:".$team->id);
+        }
+        
         return true;
     }
 
@@ -264,6 +270,21 @@ class SleeperAPIController extends Controller
     {
         $league = SleeperLeague::where('sleeper_league_id',$leagueId)->first();
         $in_season = $league->status == "in_season" ?? false;
+
+        // Create draft
+        $response = Http::get("https://api.sleeper.app/v1/league/".$league->sleeper_league_id."/drafts");
+        $draft_obj = json_decode($response, true);
+
+        foreach($draft_obj as $do)
+        {
+            $new_draft = new SleeperDraft;
+            $new_draft->league_id = $league->id;
+            $new_draft->season = intval($do["season"]);
+            $new_draft->status = $do["status"];
+            $new_draft->settings = json_encode($do["settings"]);
+            $new_draft->last_picked = strval($do["last_picked"]);
+            $new_draft->save();
+        }
 
         // Get draft pick info from Sleeper
         $response = Http::get("https://api.sleeper.app/v1/draft/".$league->sleeper_draft_id);
@@ -348,85 +369,253 @@ class SleeperAPIController extends Controller
 
     public function importTransactions($leagueId)
     {
-        return true;
         $league = SleeperLeague::where('sleeper_league_id',$leagueId)->first();
 
         // Get transaction info from Sleeper
-        $response = Http::get("https://api.sleeper.app/v1/league/".$league->sleeper_league_id."/transactions/1");
-        $transactions = json_decode($response, true);
+        // $response = Http::get("https://api.sleeper.app/v1/league/".$league->sleeper_league_id."/transactions/1");
+        // $transactions = json_decode($response, true);
+
+        $transactions = json_decode(Redis::get("leagueTransactions:".$league->id), true);
+        $rosters = json_decode(Redis::get("leagueRosters:".$league->id), true);
+
+        if (empty($rosters))
+        {
+            $rosters = [];
+
+            $teams = SleeperTeam::where('league_id',$league->id)->get();
+            foreach ($teams as $team)
+            {
+                $team_info = $team->getExpandedTeamData();
+                $players = json_decode($team_info->players);
+                $draft_picks = json_decode($team_info->draft_picks);
+                if (!isset($rosters[$team->roster_id]))
+                {
+                    foreach($players as $player)
+                    {
+                        $rosters[$team->roster_id]["players"][$player->sleeper_player_id] = $player;
+                    }
+                    foreach($draft_picks as $pick)
+                    {
+                        $rosters[$team->roster_id]["picks"][$pick->id] = $pick;
+                    }
+                }
+            }
+
+            Redis::set("leagueRosters:".$league->id, json_encode($rosters));
+        }
 
         foreach ($transactions as $transaction)
         {
-            if ($transaction["type"] != "trade" || $transaction["status"] != "complete")
-            {
-                continue;
-            }
-
-            $trade = SleeperTrade::where('sleeper_transaction_id',$transaction["transaction_id"])->first();
-            if (empty($trade))
-            {
-                $team1 = SleeperTeam::where("roster_id",$transaction["roster_ids"][0])
-                    ->where("league_id",$league->id)
-                    ->first();
-                $team2 = SleeperTeam::where("roster_id",$transaction["roster_ids"][1])
-                    ->where("league_id",$league->id)
-                    ->first();
-
-                $trade = new SleeperTrade;
-                $trade->sleeper_transaction_id = $transaction["transaction_id"];
-                $trade->team1_roster_id = $team1->id;
-                $trade->team2_roster_id = $team2->id;
-                $trade->save();
-
-                // $transaction["drops"] = json_decode($transaction["drops"], true);
-
-                // Players
-                if ($transaction["drops"])
+            $scores = [];
+            $players = [];
+            if ($transaction["type"] == "trade") {
+                $trade_obj = SleeperTrade::where("sleeper_transaction_id",$transaction["transaction_id"])->first();
+                if (empty($trade_obj))
                 {
-                    foreach($transaction["drops"] as $playerId => $rosterId)
+                    $trade_obj = new SleeperTrade;
+                    $trade_obj->sleeper_transaction_id = $transaction["transaction_id"];
+                    $trade_obj->league_id = $league->id;
+                }
+            
+                $teamIdx = 1;
+                foreach ($transaction["roster_ids"] as $rId)
+                {
+
+                    if ($teamIdx == 1)
                     {
-                        $player = SleeperPlayer::where("sleeper_player_id", $playerId)->first();
+                        $trade_obj->team1_roster_id = $rId;
+                    } else if ($teamIdx == 2) {
+                        $trade_obj->team2_roster_id = $rId;
+                    }
+                    $teamIdx++;
+
+                    $team_value = SleeperTeam::computeRosterValue($rosters[$rId]["players"],$league->id);
+                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"],$league->id);
+                    $team_value["draft"] = $draftValue;
+                    $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
+                    if (!empty($trade_obj) && $trade_obj->id == 14 && $rId == 6) {
+                        echo "<pre>";
+                        print_r($team_value);
+                        echo "</pre>";
+                    }
+                    $scores[$rId]["players"] = [
+                        "after" => $team_value
+                    ];
+                }
+                $trade_obj->save();
+            }
+            // Add or remove the players
+            if ($transaction["adds"])
+            {
+                foreach ($transaction["adds"] as $player_id => $roster_id)
+                {
+                    if ($transaction["type"] == "trade") 
+                    {
+                        $player_to_add = DB::table('sleeper_players')
+                            ->select('sleeper_players.*', 'player_ktc_value.player_value')
+                            ->leftJoin('player_ktc_value','player_ktc_value.player_id','=','sleeper_players.id')
+                            ->where('sleeper_players.sleeper_player_id',$player_id)
+                            ->first();
+
+                        $new_team = SleeperTeam::where("roster_id",$roster_id)
+                            ->where("league_id",$league->id)
+                            ->first();
+
+                        $trade_piece = SleeperTradePiece::where('trade_id','=',$trade_obj->id)    
+                            ->where('player_id',$player_to_add->id)
+                            ->where('new_team_id',$new_team->id)
+                            ->first();
                         
-                        $piece = new SleeperTradePiece;
-                        $piece->trade_id = $trade->id;
-                        $piece->player_id = $player->id;
-                        $piece->old_team_id = ($team1->roster_id == $rosterId ? $team1->id : $team2->id);
-                        if (!empty($transaction["adds"][$playerId]))
+                        if (empty($trade_piece))
                         {
-                            $piece->new_team_id = ($team1->roster_id == $rosterId ? $team1->id : $team2->id);
+                            $trade_piece = new SleeperTradePiece;
+                            $trade_piece->trade_id = $trade_obj->id;
+                            $trade_piece->player_id = $player_to_add->id;
+                            $trade_piece->new_team_id = $new_team->id;
+                            $trade_piece->save();
                         }
-                        $piece->save();
-                    }
-                }
 
-                // Picks
-                if ($transaction["draft_picks"])
-                {
-                    foreach($transaction["draft_picks"] as $pick)
-                    {
-                        $originalOwner = SleeperTeam::where("roster_id",$pick["roster_id"])
-                            ->where("league_id",$league->id)
-                            ->first();
-
-                        $pick = SleeperDraftPick::where("year", 2023)
-                            ->where("round", $pick["round"])
-                            ->where("original_owner_id", $originalOwner->id)
-                            ->where("league_id",$league->id)
-                            ->first();
-                        
-                        $piece = new SleeperTradePiece;
-                        $piece->trade_id = $trade->id;
-                        $piece->draft_pick_id = $pick->id;
-                        $piece->old_team_id = ($team1->roster_id == $pick["previous_owner_id"] ? $team1->id : $team2->id);
-                        $piece->new_team_id = ($team1->roster_id != $pick["previous_owner_id"] ? $team1->id : $team2->id);
-                        $piece->save();
                     }
+                    unset($rosters[$roster_id]["players"][$player_id]);
                 }
             }
+
+            if ($transaction["drops"])
+            {
+                foreach ($transaction["drops"] as $player_id => $roster_id)
+                {
+                    $players[$roster_id]["players"][] = $player_id; 
+                    $player_to_add = DB::table('sleeper_players')
+                        ->select('sleeper_players.*', 'player_ktc_value.player_value')
+                        ->leftJoin('player_ktc_value','player_ktc_value.player_id','=','sleeper_players.id')
+                        ->where('sleeper_players.sleeper_player_id',$player_id)
+                        ->first();
+
+                    $rosters[$roster_id]["players"][$player_id] = $player_to_add;
+                }
+            }
+            foreach ($transaction['draft_picks'] as $pick)
+            {
+                $draft_pick = DB::table('sleeper_draft_picks')
+                    ->select('sleeper_draft_picks.*')
+                    ->join('sleeper_teams','sleeper_teams.id','=','sleeper_draft_picks.original_owner_id')
+                    ->where('sleeper_draft_picks.year',$pick["season"])
+                    ->where('sleeper_draft_picks.round',$pick["round"])
+                    ->where('sleeper_teams.roster_id',$pick["roster_id"])
+                    ->where('sleeper_draft_picks.league_id',$league->id)
+                    ->first();
+
+                if (!empty($draft_pick->player_id))
+                {
+                    $players[$roster_id]["players"][] = $draft_pick->player_id; 
+                    $player_to_add = DB::table('sleeper_players')
+                        ->select('sleeper_players.*', 'player_ktc_value.player_value')
+                        ->leftJoin('player_ktc_value','player_ktc_value.player_id','=','sleeper_players.id')
+                        ->where('sleeper_players.sleeper_player_id',$draft_pick->player_id)
+                        ->first();
+
+                    $rosters[$pick["previous_owner_id"]]["players"][$draft_pick->player_id] = $player_to_add;
+                    unset($rosters[$pick["owner_id"]]["players"][$draft_pick->player_id]);
+
+                    $trade_piece = SleeperTradePiece::where('trade_id','=',$trade_obj->id)    
+                        ->where('player_id',$player_to_add->id)
+                        ->where('new_team_id',$pick["owner_id"])
+                        ->first();
+
+                    $new_team = SleeperTeam::where("roster_id",$pick["owner_id"])
+                        ->where("league_id",$league->id)
+                        ->first();
+                    
+                    if (empty($trade_piece))
+                    {
+                        $trade_piece = new SleeperTradePiece;
+                        $trade_piece->trade_id = $trade_obj->id;
+                        $trade_piece->player_id = $player_to_add->id;
+                        $trade_piece->new_team_id = $new_team->id;
+                        $trade_piece->save();
+                    }
+                } else {
+                    unset($rosters[$pick["owner_id"]]["picks"][$draft_pick->id]);
+                    $rosters[$pick["previous_owner_id"]]["picks"][$draft_pick->id] = $draft_pick;
+                    $players[$pick["previous_owner_id"]]["picks"][] = $draft_pick->id; 
+    
+                    $new_team = SleeperTeam::where("roster_id",$pick["owner_id"])
+                        ->where("league_id",$league->id)
+                        ->first();
+    
+                    $trade_piece = SleeperTradePiece::where('trade_id','=',$trade_obj->id)    
+                        ->where('draft_pick_id',$draft_pick->id)
+                        ->where('new_team_id',$new_team->id)
+                        ->first();
+                    
+                    if (empty($trade_piece))
+                    {
+                        $trade_piece = new SleeperTradePiece;
+                        $trade_piece->trade_id = $trade_obj->id;
+                        $trade_piece->draft_pick_id = $draft_pick->id;
+                        $trade_piece->new_team_id = $new_team->id;
+                        $trade_piece->save();
+                    } 
+                }
+                
+            }
+            if ($transaction["type"] == "trade") {
+                foreach ($transaction["roster_ids"] as $rId)
+                {
+                    $team_value = SleeperTeam::computeRosterValue($rosters[$rId]["players"],$league->id);
+                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"],$league->id);
+                    $team_value["draft"] = $draftValue;
+                    $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
+                    if (!empty($trade_obj) && $trade_obj->id == 14 && $rId == 6) {
+                        echo "<pre>";
+                        print_r($team_value);
+                        echo "</pre>";
+                    }
+                    $scores[$rId]["players"]["before"] = $team_value;
+                }
+
+
+                $difference = [];
+                $teamIdx = 1;
+                foreach($scores as $rosterId => $score)
+                {
+                    $after = (float)$score["players"]["after"]["total"]["value"];
+                    $before = (float)$score["players"]["before"]["total"]["value"];
+                    $difference[$rosterId] = ($after - $before)/$before;
+
+                    $trade_obj = SleeperTrade::find($trade_obj->id);
+                    if ($trade_obj->team1_roster_id == $rosterId)
+                    {
+                        $trade_obj->team1_value = sprintf("%.3f", $difference[$rosterId]);
+                    } else if ($trade_obj->team2_roster_id == $rosterId) {
+                        $trade_obj->team2_value = sprintf("%.3f", $difference[$rosterId]);
+                    }
+
+                    $trade_obj->save();
+                }
+            }
+
         }
     
 
         return true;
+    }
+
+    public function temporary($leagueId)
+    {
+        // $league = SleeperLeague::where('sleeper_league_id',$leagueId)->first();
+        // // Get draft pick info from Sleeper
+        // $response = Http::get("https://api.sleeper.app/v1/draft/".$league->sleeper_draft_id."/picks");
+        // $draft = json_decode($response, true);
+
+        // foreach ($draft as $pick)
+        // {
+        //     SleeperDraftPick::where('year',2023)
+        //         ->where('round',$pick["round"])
+        //         ->where('pick',$pick["pick_no"]-(($pick["round"]-1)*12))
+        //         ->where('league_id',$league->id)
+        //         ->update(['player_id' => $pick["player_id"]]);
+        // }
     }
 
 

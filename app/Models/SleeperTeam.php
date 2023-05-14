@@ -121,6 +121,7 @@ class SleeperTeam extends Model
 
         foreach($players as $player)
         {
+            $player = (object) $player;
             if (!isset($teamValue[$player->position]))
             {
                 $teamValue[$player->position] = [
@@ -184,6 +185,7 @@ class SleeperTeam extends Model
 
         foreach($picks as $pick)
         {
+            $pick = (object) $pick;
             if (!isset($pickValue[$pick->year]))
             {
                 $pickValue[$pick->year] = ["count" => 0, "value" => 0];
@@ -203,6 +205,7 @@ class SleeperTeam extends Model
                     ->select(DB::raw("player_ktc_value.player_value"))
                     ->join("player_ktc_value","player_ktc_value.player_id","=","sleeper_players.id")
                     ->whereNull("years_exp")
+                    ->orderBy('player_ktc_value.player_value','desc')
                     ->skip($skip)
                     ->take(1)
                     ->get();
@@ -263,5 +266,40 @@ class SleeperTeam extends Model
         }
 
         return $pickValue;
+    }
+
+    public function getExpandedTeamData()
+    {
+        $team = $this;
+        $player_array = $team->getTeamPlayers();
+        $team->players = json_encode($player_array);
+
+        $pos_array = [];
+        foreach($player_array as $player)
+        {
+            if ($player->position == "K")
+            {
+                unset($player);
+                continue;
+            }
+            if (!isset($pos_array[$player->position]))
+            {
+                $pos_array[$player->position] = [];
+            }
+            $pos_array[$player->position][] = $player;
+        }
+        $team->pos_array = json_encode($pos_array);
+
+        $team_value = $team->getTeamValue();
+
+        $picks = SleeperDraftPick::where('team_id',$team->id)->orderby('round','asc')->get();
+        $team->draft_picks = json_encode($picks);
+
+        $draftValue = SleeperTeam::computeDraftValue($picks);
+        $team_value["draft"] = $draftValue;
+        $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
+        $team->value = json_encode($team_value);
+
+        return $team;
     }
 }
