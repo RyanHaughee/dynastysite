@@ -34,7 +34,7 @@ Route::get('/league/{league_id}', [LeagueController::class, 'getLeagueInfo']);
 Route::get('/league/get-teams/{league_id}', [LeagueController::class, 'getLeagueTeams']);
 Route::get('/league/create-draft-picks/{league_id}', [LeagueController::class, 'createFutureDraftPicks']);
 Route::get('/league/get-trades/{league_id}', [LeagueController::class, 'loadTransactions']);
-// Route::get('/league/temporary/{league_id}', [SleeperAPIController::class, 'temporary']);
+Route::get('/league/temporary/{league_id}', [SleeperAPIController::class, 'temporary']);
 
 Route::get('/team/value/{team_id}', [TeamController::class, 'getTeamValue']);
 Route::get('/team/value/expanded/{team_id}', [TeamController::class, 'getExpandedTeamData']);

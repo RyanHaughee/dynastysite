@@ -31,6 +31,8 @@ class SleeperAPIController extends Controller
             $this->importTeamsFromLeague($leagueId);
             $this->importTeamInfo($leagueId);
             $this->importDraftPicks($leagueId);
+            $this->makeDraftPicks($leagueId);
+            $this->importTransactions($leagueId);
         } catch (\Exception $e)
         {
             $response = [
@@ -79,6 +81,10 @@ class SleeperAPIController extends Controller
             }
         }
         $league->save();
+
+        // clear any caches surronding this league
+        Redis::del("leagueTransactions:".$league->id);
+
         return true;
     }
 
@@ -277,13 +283,23 @@ class SleeperAPIController extends Controller
 
         foreach($draft_obj as $do)
         {
-            $new_draft = new SleeperDraft;
-            $new_draft->league_id = $league->id;
-            $new_draft->season = intval($do["season"]);
-            $new_draft->status = $do["status"];
-            $new_draft->settings = json_encode($do["settings"]);
-            $new_draft->last_picked = strval($do["last_picked"]);
-            $new_draft->save();
+
+            // check if draft exists
+            $draft_exists = SleeperDraft::where('league_id',$league->id)
+                ->where('season',intval($do["season"]))
+                ->first();
+            
+            if (empty($draft_exists))
+            {
+                $new_draft = new SleeperDraft;
+                $new_draft->league_id = $league->id;
+                $new_draft->season = intval($do["season"]);
+                $new_draft->status = $do["status"];
+                $new_draft->settings = json_encode($do["settings"]);
+                $new_draft->start_time = strval($do["start_time"]);
+                $new_draft->last_picked = strval($do["last_picked"]);
+                $new_draft->save(); 
+            }
         }
 
         // Get draft pick info from Sleeper
@@ -316,12 +332,6 @@ class SleeperAPIController extends Controller
                     $draftpick->original_owner_id = $team->id;
                     $draftpick->year = 2023;
                     $draftpick->save();
-                } else {
-                    if ($in_season)
-                    {
-                        $draftpick->team_id = 0;
-                        $draftpick->save();
-                    }
                 }
                 $round++;
             }
@@ -370,44 +380,68 @@ class SleeperAPIController extends Controller
     public function importTransactions($leagueId)
     {
         $league = SleeperLeague::where('sleeper_league_id',$leagueId)->first();
+        $league_id = $league->id;
+        $log = [];
 
-        // Get transaction info from Sleeper
-        // $response = Http::get("https://api.sleeper.app/v1/league/".$league->sleeper_league_id."/transactions/1");
-        // $transactions = json_decode($response, true);
-
+        // Get transactions from the cache or sleeper API
         $transactions = json_decode(Redis::get("leagueTransactions:".$league->id), true);
-        $rosters = json_decode(Redis::get("leagueRosters:".$league->id), true);
 
-        if (empty($rosters))
+        if (empty($transactions))
         {
-            $rosters = [];
+            // Get transaction info from Sleeper
+            $response = Http::get("https://api.sleeper.app/v1/league/".$league->sleeper_league_id."/transactions/1");
+            $transactions = json_decode($response, true);
+            Redis::set("leagueTransactions:".$league->id, json_encode($transactions));
+        }
 
-            $teams = SleeperTeam::where('league_id',$league->id)->get();
-            foreach ($teams as $team)
+        $rosters = [];
+
+        $teams = SleeperTeam::where('league_id',$league->id)->get();
+        foreach ($teams as $team)
+        {
+            // Get team roster from the cache or Sleeper API
+            $team_info = json_decode(Redis::get("expandedteam:".$team->id));
+            if (empty($team_info))
             {
-                $team_info = $team->getExpandedTeamData();
-                $players = json_decode($team_info->players);
-                $draft_picks = json_decode($team_info->draft_picks);
-                if (!isset($rosters[$team->roster_id]))
+               $team_info = $team->getExpandedTeamData();
+               Redis::set("expandedteam:".$team->id, json_encode($team_info)); 
+            }
+            $players = json_decode($team_info->players);
+            $draft_picks = json_decode($team_info->draft_picks);
+            if (!isset($rosters[$team->roster_id]))
+            {
+                foreach($players as $player)
                 {
-                    foreach($players as $player)
+                    $rosters[$team->roster_id]["players"][$player->sleeper_player_id] = $player;
+                    if (!isset($log[1]))
                     {
-                        $rosters[$team->roster_id]["players"][$player->sleeper_player_id] = $player;
-                    }
-                    foreach($draft_picks as $pick)
-                    {
-                        $rosters[$team->roster_id]["picks"][$pick->id] = $pick;
+                        Log::info("1: ");
+                        Log::info(gettype($player));
+                        $log[1] = true;
                     }
                 }
+                foreach($draft_picks as $pick)
+                {
+                    $rosters[$team->roster_id]["picks"][$pick->id] = $pick;
+                }
             }
-
-            Redis::set("leagueRosters:".$league->id, json_encode($rosters));
         }
+
+        // get when the 2023 draft happened
+        $draft_times = SleeperDraft::where('league_id',$league->id)
+            ->where('season', 2023)
+            ->where('status','complete')
+            ->first();
+
+        $team_draft_picks_added = [];
 
         foreach ($transactions as $transaction)
         {
             $scores = [];
             $players = [];
+
+            $predraft = $transaction["status_updated"] <= (float)$draft_times->start_time;
+
             if ($transaction["type"] == "trade") {
                 $trade_obj = SleeperTrade::where("sleeper_transaction_id",$transaction["transaction_id"])->first();
                 if (empty($trade_obj))
@@ -420,6 +454,28 @@ class SleeperAPIController extends Controller
                 $teamIdx = 1;
                 foreach ($transaction["roster_ids"] as $rId)
                 {
+                    if (empty($team_draft_picks_added[$rId]) && $predraft)
+                    {
+                        foreach($rosters[$rId]["players"] as $ply)
+                        {
+                            $ply = (object) $ply;
+                            if (empty($ply->years_exp))
+                            {
+                                unset($rosters[$rId]["players"][$ply->sleeper_player_id]);
+
+                                // check to see if he should be converted to a draft pick
+                                $pick = SleeperDraftPick::where('league_id',$league->id)
+                                    ->where('year',2023)
+                                    ->where('player_id',$ply->sleeper_player_id)
+                                    ->first();
+
+                                if (!empty($pick))
+                                {
+                                    $rosters[$rId]["picks"][$pick->id] = $pick;
+                                }
+                            }
+                        }
+                    }
 
                     if ($teamIdx == 1)
                     {
@@ -430,14 +486,9 @@ class SleeperAPIController extends Controller
                     $teamIdx++;
 
                     $team_value = SleeperTeam::computeRosterValue($rosters[$rId]["players"],$league->id);
-                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"],$league->id);
+                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"]);
                     $team_value["draft"] = $draftValue;
                     $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
-                    if (!empty($trade_obj) && $trade_obj->id == 14 && $rId == 6) {
-                        echo "<pre>";
-                        print_r($team_value);
-                        echo "</pre>";
-                    }
                     $scores[$rId]["players"] = [
                         "after" => $team_value
                     ];
@@ -505,7 +556,11 @@ class SleeperAPIController extends Controller
                     ->where('sleeper_draft_picks.league_id',$league->id)
                     ->first();
 
-                if (!empty($draft_pick->player_id))
+                $new_team = SleeperTeam::where("roster_id",$pick["owner_id"])
+                    ->where("league_id",$league->id)
+                    ->first();
+
+                if (!empty($draft_pick->player_id) && !$predraft && $draft_pick->team_id == $new_team->id)
                 {
                     $players[$roster_id]["players"][] = $draft_pick->player_id; 
                     $player_to_add = DB::table('sleeper_players')
@@ -514,16 +569,15 @@ class SleeperAPIController extends Controller
                         ->where('sleeper_players.sleeper_player_id',$draft_pick->player_id)
                         ->first();
 
-                    $rosters[$pick["previous_owner_id"]]["players"][$draft_pick->player_id] = $player_to_add;
+                    $rosters[$pick["previous_owner_id"]]["picks"][$draft_pick->id] = $draft_pick;
                     unset($rosters[$pick["owner_id"]]["players"][$draft_pick->player_id]);
 
-                    $trade_piece = SleeperTradePiece::where('trade_id','=',$trade_obj->id)    
-                        ->where('player_id',$player_to_add->id)
-                        ->where('new_team_id',$pick["owner_id"])
-                        ->first();
-
-                    $new_team = SleeperTeam::where("roster_id",$pick["owner_id"])
-                        ->where("league_id",$league->id)
+                    $trade_piece = SleeperTradePiece::where('trade_id','=',$trade_obj->id)
+                        ->where(function ($query) use ($draft_pick, $player_to_add) {
+                            $query->where('player_id',$player_to_add->id)
+                                ->orWhere('draft_pick_id',$draft_pick->id);
+                        })
+                        ->where('new_team_id',$new_team->id)
                         ->first();
                     
                     if (empty($trade_piece))
@@ -538,10 +592,6 @@ class SleeperAPIController extends Controller
                     unset($rosters[$pick["owner_id"]]["picks"][$draft_pick->id]);
                     $rosters[$pick["previous_owner_id"]]["picks"][$draft_pick->id] = $draft_pick;
                     $players[$pick["previous_owner_id"]]["picks"][] = $draft_pick->id; 
-    
-                    $new_team = SleeperTeam::where("roster_id",$pick["owner_id"])
-                        ->where("league_id",$league->id)
-                        ->first();
     
                     $trade_piece = SleeperTradePiece::where('trade_id','=',$trade_obj->id)    
                         ->where('draft_pick_id',$draft_pick->id)
@@ -563,20 +613,22 @@ class SleeperAPIController extends Controller
                 foreach ($transaction["roster_ids"] as $rId)
                 {
                     $team_value = SleeperTeam::computeRosterValue($rosters[$rId]["players"],$league->id);
-                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"],$league->id);
+                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"]);
                     $team_value["draft"] = $draftValue;
                     $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
-                    if (!empty($trade_obj) && $trade_obj->id == 14 && $rId == 6) {
-                        echo "<pre>";
-                        print_r($team_value);
-                        echo "</pre>";
-                    }
                     $scores[$rId]["players"]["before"] = $team_value;
                 }
 
+                // if ($trade_obj->id == 3)
+                // {
+                //     echo "<pre>";
+                //     print_r($scores);
+                //     echo "</pre>";
+                // }
 
                 $difference = [];
                 $teamIdx = 1;
+
                 foreach($scores as $rosterId => $score)
                 {
                     $after = (float)$score["players"]["after"]["total"]["value"];
@@ -601,21 +653,21 @@ class SleeperAPIController extends Controller
         return true;
     }
 
-    public function temporary($leagueId)
+    public function makeDraftPicks($leagueId)
     {
-        // $league = SleeperLeague::where('sleeper_league_id',$leagueId)->first();
-        // // Get draft pick info from Sleeper
-        // $response = Http::get("https://api.sleeper.app/v1/draft/".$league->sleeper_draft_id."/picks");
-        // $draft = json_decode($response, true);
+        $league = SleeperLeague::where('sleeper_league_id',$leagueId)->first();
+        // Get draft pick info from Sleeper
+        $response = Http::get("https://api.sleeper.app/v1/draft/".$league->sleeper_draft_id."/picks");
+        $draft = json_decode($response, true);
 
-        // foreach ($draft as $pick)
-        // {
-        //     SleeperDraftPick::where('year',2023)
-        //         ->where('round',$pick["round"])
-        //         ->where('pick',$pick["pick_no"]-(($pick["round"]-1)*12))
-        //         ->where('league_id',$league->id)
-        //         ->update(['player_id' => $pick["player_id"]]);
-        // }
+        foreach ($draft as $pick)
+        {
+            SleeperDraftPick::where('year',2023)
+                ->where('round',$pick["round"])
+                ->where('pick',$pick["pick_no"]-(($pick["round"]-1)*12))
+                ->where('league_id',$league->id)
+                ->update(['player_id' => $pick["player_id"]]);
+        }
     }
 
 

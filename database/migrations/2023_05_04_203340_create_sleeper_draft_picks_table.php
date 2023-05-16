@@ -17,6 +17,7 @@ return new class extends Migration
             $table->integer('round');
             $table->integer('pick')->nullable();
             $table->integer('team_id');
+            $table->integer('player_id')->nullable();
             $table->integer('year');
             $table->timestamps();
         });

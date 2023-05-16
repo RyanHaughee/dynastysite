@@ -13,19 +13,19 @@ return new class extends Migration
     {
         Schema::create('sleeper_leagues', function (Blueprint $table) {
             $table->id();
-            $table->integer('total_rosters');
-            $table->string('status');
-            $table->string('sport');
-            $table->json('settings');
-            $table->string('season_type');
-            $table->string('season');
-            $table->json('scoring_settings');
-            $table->json('roster_positions');
-            $table->string('sleeper_previous_league_id');
-            $table->string('name');
-            $table->string('sleeper_league_id');
-            $table->string('sleeper_draft_id');
-            $table->string('avatar');
+            $table->integer('total_rosters')->nullable();
+            $table->string('status')->nullable();
+            $table->string('sport')->nullable();
+            $table->json('settings')->nullable();
+            $table->string('season_type')->nullable();
+            $table->string('season')->nullable();
+            $table->json('scoring_settings')->nullable();
+            $table->json('roster_positions')->nullable();
+            $table->string('sleeper_previous_league_id')->nullable();
+            $table->string('name')->nullable();
+            $table->string('sleeper_league_id')->nullable();
+            $table->string('sleeper_draft_id')->nullable();
+            $table->string('avatar')->nullable();
             $table->timestamps();
         });
     }

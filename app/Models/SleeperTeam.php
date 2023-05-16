@@ -113,6 +113,13 @@ class SleeperTeam extends Model
             unset($roster_settings["FLEX"]);
         }
 
+        $players = collect($players);
+
+        $players = $players->sortByDesc(function($player)
+        {
+            return $player->player_value;
+        }); 
+
         $teamValue = [];
         $teamValue["total"] = [
             "count" => 0,
@@ -121,7 +128,6 @@ class SleeperTeam extends Model
 
         foreach($players as $player)
         {
-            $player = (object) $player;
             if (!isset($teamValue[$player->position]))
             {
                 $teamValue[$player->position] = [
@@ -133,8 +139,9 @@ class SleeperTeam extends Model
             $teamValue["total"]["count"] += 1;
 
             // Computational Variables
-            $fullValueCount = ($roster_settings[$player->position] + 1);
-            $partialValueCount = (($roster_settings[$player->position] + 1)*2);
+            $fullValueCount = ($roster_settings[$player->position])+1;
+            $partialValueCount = (($roster_settings[$player->position])*2)+1;
+
             $multiplier = ($partialValueCount - $teamValue[$player->position]["count"]) / $fullValueCount;
             
             if ($multiplier >= 1)
@@ -183,16 +190,14 @@ class SleeperTeam extends Model
             $future_pick_value_arr[$pick->player_name] = $pick->player_value;
         }
 
+        // $pick_array = [];
+
         foreach($picks as $pick)
         {
-            $pick = (object) $pick;
             if (!isset($pickValue[$pick->year]))
             {
                 $pickValue[$pick->year] = ["count" => 0, "value" => 0];
             }
-
-            $pickValue[$pick->year]["count"] += 1;
-            $pickValue["total"]["count"] += 1;
 
             $pick_year_value = ($pick->year > 2025) ? 2025 : $pick->year;
 
@@ -210,7 +215,7 @@ class SleeperTeam extends Model
                     ->take(1)
                     ->get();
 
-                $value = $value[0]->player_value;
+                $pick->value = $value[0]->player_value;
             } else {
                 $teamComparable = SleeperDraftPick::where("original_owner_id",$pick->original_owner_id)
                     ->where("round",$pick->round)
@@ -247,21 +252,35 @@ class SleeperTeam extends Model
 
                     $value = $value + ($future_pick_value_arr[$pick_year_value." Late ".$verbiage[$pick->round]] * $weight);
                 }
+                $pick->value = $value;
             }
+        }
 
+        $picks = collect($picks);
+
+        $picks = $picks->sortByDesc(function($pick)
+        {
+            return $pick->value;
+        }); 
+        
+
+        foreach($picks as $pick)
+        {
+            $pickValue[$pick->year]["count"] += 1;
+            $pickValue["total"]["count"] += 1;
 
             // Computational Variables
-            $multiplier = (6 - $pickValue[$pick->year]["count"]) / 3;
+            $multiplier = (7 - $pickValue[$pick->year]["count"]) / 4;
             
             if ($multiplier >= 1)
             {
-                $pickValue[$pick->year]["value"] += $value;
-                $pickValue["total"]["value"] += $value;
+                $pickValue[$pick->year]["value"] += $pick->value;
+                $pickValue["total"]["value"] += $pick->value;
             }
             else if ($multiplier >= 0)
             {
-                $pickValue[$pick->year]["value"] += ($multiplier * $value);
-                $pickValue["total"]["value"] += ($multiplier * $value);
+                $pickValue[$pick->year]["value"] += ($multiplier * $pick->value);
+                $pickValue["total"]["value"] += ($multiplier * $pick->value);
             }
         }
 
@@ -292,7 +311,8 @@ class SleeperTeam extends Model
 
         $team_value = $team->getTeamValue();
 
-        $picks = SleeperDraftPick::where('team_id',$team->id)->orderby('round','asc')->get();
+        $picks = SleeperDraftPick::getActiveDraftPicksForTeam($team->id);
+
         $team->draft_picks = json_encode($picks);
 
         $draftValue = SleeperTeam::computeDraftValue($picks);

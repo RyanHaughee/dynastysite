@@ -17,6 +17,7 @@ return new class extends Migration
             $table->integer('season');
             $table->string('status');
             $table->json('settings');
+            $table->string('start_time');
             $table->string('last_picked');
             $table->timestamps();
         });

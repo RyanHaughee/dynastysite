@@ -1,21 +1,35 @@
 <style>
+.team-logo {
+    max-width:50px
+}
+.team-name {
+    font-weight:bold;
+    display: inline-block;
+    margin-left: 5px;
+}
+.trade-pieces{margin-top:10px;}
 </style>
 
 <template>
     <div class="container">
         <div v-for="trade in trades" :key="trade.id" class="row">
-            <div class="col-sm-6">
-                <h5 style="font-weight:bold">{{ trade.team1.team_name }} - {{ trade.team1_grade }}</h5>
-                <ul>
+            <div class="col-sm-2">
+                <h4>TRADE SCORE:</h4>
+                <h4>{{ trade.total_score }}</h4>
+            </div>
+            <div class="col-sm-5">
+                <img class="team-logo" :src="trade.team1.team_logo"/>
+                <h5 class="team-name">{{ trade.team1.team_name }} - {{ trade.team1_grade }}</h5>
+                <ul class="trade-pieces">
                     <li v-for="piece in trade.team1_details" :key="piece.id">
                         {{ piece }}
                     </li>
                 </ul>
-                
             </div>
-            <div class="col-sm-6">
-                <h5 style="font-weight:bold">{{ trade.team2.team_name }} - {{ trade.team2_grade }}</h5>
-                <ul>
+            <div class="col-sm-5">
+                <img class="team-logo" :src="trade.team2.team_logo"/>
+                <h5 class="team-name">{{ trade.team2.team_name }} - {{ trade.team2_grade }}</h5>
+                <ul class="trade-pieces">
                     <li v-for="piece in trade.team2_details" :key="piece.id">
                         {{ piece }}
                     </li>
