@@ -43,7 +43,7 @@
 <template>
     <div class="container">
         <div class="row">
-            <div class="col-md-3 order-md-12 justify-content-center">
+            <div class="col-lg-3 order-md-12 justify-content-center">
                 <div class="container">
                     <div class="category card" @click="navTabSelected = (navTabSelected == 'team' ? null : 'team')">
                         <div class="tab-content">
@@ -82,7 +82,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-9 order-md-1 justify-content-center ">
+            <div class="col-lg-9 order-md-1 justify-content-center ">
                 <TeamPage v-if="expandedTeamId && navTabSelected == 'team'" :team_id="expandedTeamId"/>
                 <TradePage v-if="navTabSelected == 'trades'" :league_id="league.id"/>
             </div>

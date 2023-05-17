@@ -26,21 +26,21 @@ class SleeperAPIController extends Controller
 
     public function setupLeague($leagueId)
     {
-        try {
+        // try {
             $this->importLeague($leagueId);
             $this->importTeamsFromLeague($leagueId);
             $this->importTeamInfo($leagueId);
             $this->importDraftPicks($leagueId);
             $this->makeDraftPicks($leagueId);
             $this->importTransactions($leagueId);
-        } catch (\Exception $e)
-        {
-            $response = [
-                "success" => false,
-                "message" => $e->getMessage()
-            ];
-            return $response;
-        }
+        // } catch (\Exception $e)
+        // {
+        //     $response = [
+        //         "success" => false,
+        //         "message" => $e->getMessage()
+        //     ];
+        //     return $response;
+        // }
         
         return ["success" => true];
     }
@@ -312,7 +312,7 @@ class SleeperAPIController extends Controller
         foreach($draft_order as $userId => $pick)
         {
             $round = 1;
-            while ($round <= 3)
+            while ($round <= $draft['settings']['rounds'])
             {
                 $team = SleeperTeam::where("sleeper_user_id",$userId)
                     ->where("league_id",$league->id)
@@ -346,7 +346,7 @@ class SleeperAPIController extends Controller
         
         if (empty($needToUploadPicksCheck))
         {
-            LeagueController::createFutureDraftPicks($leagueId, $year);
+            LeagueController::createFutureDraftPicks($leagueId, $year, $draft['settings']['rounds']);
         }
 
         // backfill the traded picks
@@ -440,7 +440,7 @@ class SleeperAPIController extends Controller
             $scores = [];
             $players = [];
 
-            $predraft = $transaction["status_updated"] <= (float)$draft_times->start_time;
+            $predraft = !empty($draft_times->start_time) ? $transaction["status_updated"] <= (float)$draft_times->start_time : true;
 
             if ($transaction["type"] == "trade") {
                 $trade_obj = SleeperTrade::where("sleeper_transaction_id",$transaction["transaction_id"])->first();
@@ -486,7 +486,7 @@ class SleeperAPIController extends Controller
                     $teamIdx++;
 
                     $team_value = SleeperTeam::computeRosterValue($rosters[$rId]["players"],$league->id);
-                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"]);
+                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"], $rosters[$rId]["players"]);
                     $team_value["draft"] = $draftValue;
                     $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
                     $scores[$rId]["players"] = [
@@ -613,7 +613,7 @@ class SleeperAPIController extends Controller
                 foreach ($transaction["roster_ids"] as $rId)
                 {
                     $team_value = SleeperTeam::computeRosterValue($rosters[$rId]["players"],$league->id);
-                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"]);
+                    $draftValue = SleeperTeam::computeDraftValue($rosters[$rId]["picks"],$rosters[$rId]["players"]);
                     $team_value["draft"] = $draftValue;
                     $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
                     $scores[$rId]["players"]["before"] = $team_value;

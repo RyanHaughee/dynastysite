@@ -62,9 +62,8 @@ class LeagueController extends Controller
 
     // **************************************************** //
     // **** Should only be called once for each league **** //
-    // ****** TODO: Create a way to cross-check this ****** //
     // **************************************************** //
-    public static function createFutureDraftPicks($league_id, $max_year)
+    public static function createFutureDraftPicks($league_id, $max_year, $rounds)
     {
         $league = SleeperLeague::where('sleeper_league_id',$league_id)->first();
 
@@ -89,7 +88,7 @@ class LeagueController extends Controller
             if (empty($needToUploadPicksCheck))
             {
                 $round = 1;
-                while ($round <= 3)
+                while ($round <= $rounds)
                 {
                     foreach($teams as $team)
                     {
@@ -115,7 +114,23 @@ class LeagueController extends Controller
         $rounds = [
             1 => "1st",
             2 => "2nd",
-            3 => "3rd"
+            3 => "3rd",
+            4 => "4th"
+        ];
+
+        $score_array = [
+            "A+" => 87,
+            "A" => 83,
+            "A-" => 80,
+            "B+" => 77,
+            "B" => 73,
+            "B-" => 70,
+            "C+" => 67,
+            "C" => 63,
+            "C-" => 60,
+            "D+" => 57,
+            "D" => 53,
+            "F" => 0
         ];
 
         foreach ($trades as $trade)
@@ -135,8 +150,14 @@ class LeagueController extends Controller
                     $details[$piece->new_team_id][] = $original_owner->team_name." ".$pick->year." ".$rounds[$pick->round];
                 }
             }
-            $team1 = SleeperTeam::select('team_name', 'id', 'team_logo')->where("roster_id",$trade->team1_roster_id)->first();
-            $team2 = SleeperTeam::select('team_name', 'id', 'team_logo')->where("roster_id",$trade->team2_roster_id)->first();
+            $team1 = SleeperTeam::select('team_name', 'id', 'team_logo')
+                ->where("roster_id",$trade->team1_roster_id)
+                ->where("league_id",$league_id)
+                ->first();
+            $team2 = SleeperTeam::select('team_name', 'id', 'team_logo')
+                ->where("roster_id",$trade->team2_roster_id)
+                ->where("league_id",$league_id)
+                ->first();
             
             $trade->team1_details = $details[$team1->id] ?? [];
             $trade->team1 = $team1;
@@ -145,7 +166,19 @@ class LeagueController extends Controller
 
             $trade->team1_grade = (int) (75 + (($trade->team1_value)*416.7));
             $trade->team2_grade = (int) (75 + (($trade->team2_value)*416.7));
-            $trade->total_score = (int) (75 + (($trade->team2_value+$trade->team1_value)*250));
+            $total_score = (int) (75 + (($trade->team2_value+$trade->team1_value)*250));
+
+            foreach($score_array as $grade => $score)
+            {
+                if ($total_score >= $score)
+                {
+                    $trade->total_score = $grade;
+                    break;
+                }
+            }
+
+            $trade->team1_opacity = abs(($trade->team1_grade-75)/25);
+            $trade->team2_opacity = abs(($trade->team2_grade-75)/25);
         }
 
         return [

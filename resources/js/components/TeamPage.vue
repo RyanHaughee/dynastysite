@@ -5,6 +5,7 @@
     .team-logo-expanded {max-height:200px}
     .doughnut-size{max-height:250px}
     .player-text{font-size:16px; font-weight:500}
+    #posValueChart{max-width:500px; margin: auto}
 </style>
 
 <template>
@@ -19,10 +20,10 @@
                     <div class="card-body">
                         <div class="container">
                             <div class="row">
-                                <div class="col-sm-4 true-center">
+                                <div class="col-lg-4 true-center">
                                     <img v-if="team.team_logo" :src="team.team_logo" class="team-logo-expanded"/>
                                 </div>
-                                <div class="col-sm-4">
+                                <div class="col-lg-4" style="text-align:center">
                                     <Doughnut
                                         id="posValueChart"
                                         :options="chartOptions"
@@ -30,7 +31,7 @@
                                         v-if="chartReady"
                                     />
                                 </div>
-                                <div class="col-sm-4 true-center">
+                                <div class="col-lg-4 true-center">
                                     <h4>Team History</h4>
                                     <b>All Time Record:</b> {{ team.alltime_wins }} - {{ team.alltime_losses }} ({{ Math.round((team.alltime_wins / (team.alltime_wins + team.alltime_losses))*1000)/10}}%)
                                 </div>
@@ -122,7 +123,7 @@
             },
             setTeamValue(){
                 let valueArr = [];
-                let circumference = 365 * (Math.round(this.team.value.total.value) / 130000);
+                let circumference = 365 * (Math.round(this.team.value.total.value) / 100000);
                 valueArr.push(Math.round(this.team.value.QB.value));
                 valueArr.push(Math.round(this.team.value.RB.value));
                 valueArr.push(Math.round(this.team.value.WR.value));
