@@ -79,6 +79,7 @@
                         <button v-if="!newLeagueLoading" class="btn btn-primary btn-style" @click="setupLeague()">Refresh</button>
                         <button v-if="!newLeagueLoading" class="btn btn-secondary btn-style" @click="getLeague()">Load</button>
                         <div v-if="newLeagueLoading" class="spinner-border margin-center" role="status"></div>
+                        <p style="font-size:10px; margin-top: 10px; text-align:center">Please only hit "Refresh" if it is your first time viewing a league (and therefore the data doesn't exist) or if the information is out of date. Otherwise, the "Load" button should work fine.</p>
                     </div>
                 </div>
             </div>
