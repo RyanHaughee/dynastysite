@@ -11,14 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('sleeper_draft_picks', function (Blueprint $table) {
+        Schema::create('sleeper_drafts', function (Blueprint $table) {
             $table->id();
             $table->integer('league_id');
-            $table->integer('round');
-            $table->integer('pick')->nullable();
-            $table->integer('team_id');
-            $table->integer('player_id')->nullable();
-            $table->integer('year');
+            $table->integer('season');
+            $table->string('status');
+            $table->json('settings');
+            $table->string('start_time');
+            $table->string('last_picked');
             $table->timestamps();
         });
     }
@@ -28,6 +28,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('sleeper_draft_picks');
+        Schema::dropIfExists('sleeper_drafts');
     }
 };

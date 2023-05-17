@@ -5,6 +5,7 @@
     .team-logo-expanded {max-height:200px}
     .doughnut-size{max-height:250px}
     .player-text{font-size:16px; font-weight:500}
+    #posValueChart{max-width:500px; margin: auto}
 </style>
 
 <template>
@@ -19,10 +20,10 @@
                     <div class="card-body">
                         <div class="container">
                             <div class="row">
-                                <div class="col-sm-4 true-center">
+                                <div class="col-lg-4 true-center">
                                     <img v-if="team.team_logo" :src="team.team_logo" class="team-logo-expanded"/>
                                 </div>
-                                <div class="col-sm-4">
+                                <div class="col-lg-4" style="text-align:center">
                                     <Doughnut
                                         id="posValueChart"
                                         :options="chartOptions"
@@ -30,7 +31,7 @@
                                         v-if="chartReady"
                                     />
                                 </div>
-                                <div class="col-sm-4 true-center">
+                                <div class="col-lg-4 true-center">
                                     <h4>Team History</h4>
                                     <b>All Time Record:</b> {{ team.alltime_wins }} - {{ team.alltime_losses }} ({{ Math.round((team.alltime_wins / (team.alltime_wins + team.alltime_losses))*1000)/10}}%)
                                 </div>
@@ -67,7 +68,6 @@
 
     // this is must have
     import { library } from '@fortawesome/fontawesome-svg-core';
-    import {  } from "@fortawesome/free-regular-svg-icons";
     import { faStar, faGem, faTrashCan } from "@fortawesome/free-solid-svg-icons";
     library.add(faGem, faStar, faTrashCan)
 
@@ -78,6 +78,7 @@
             team_id: function() {
                 this.chartReady = false;
                 this.getExpandedTeamData();
+                console.log("calling function2");
             }
         },
         data() {
@@ -104,9 +105,11 @@
         },
         mounted() {
             this.getExpandedTeamData();
+            console.log("calling function1");
         },
         methods: {
             async getExpandedTeamData() {
+                console.log("function called");
                 let response = await axios.get('/team/value/expanded/'+this.team_id);
                 if (response && response.data && response.data.success)
                 {
@@ -120,7 +123,7 @@
             },
             setTeamValue(){
                 let valueArr = [];
-                let circumference = 365 * (Math.round(this.team.value.total.value) / 130000);
+                let circumference = 365 * (Math.round(this.team.value.total.value) / 100000);
                 valueArr.push(Math.round(this.team.value.QB.value));
                 valueArr.push(Math.round(this.team.value.RB.value));
                 valueArr.push(Math.round(this.team.value.WR.value));

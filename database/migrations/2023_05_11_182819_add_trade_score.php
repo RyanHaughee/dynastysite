@@ -11,8 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('sleeper_draft_picks', function (Blueprint $table) {
-            $table->integer('original_owner_id')->nullable();
+        Schema::table('sleeper_trades', function (Blueprint $table) {
+            $table->string('team1_value')->nullable();
+            $table->string('team2_value')->nullable();
         });
     }
 
@@ -21,8 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('sleeper_draft_picks', function (Blueprint $table) {
-            $table->dropColumn('original_owner_id');
+        Schema::table('sleeper_trades', function (Blueprint $table) {
+            $table->dropColumn('team1_value');
+            $table->dropColumn('team2_value');
         });
     }
 };

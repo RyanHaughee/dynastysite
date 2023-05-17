@@ -7,6 +7,7 @@ use App\Models\SleeperTeam;
 use Illuminate\Http\Request;
 use App\Models\SleeperDraftPick;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 
 class TeamController extends Controller
 {
@@ -28,35 +29,15 @@ class TeamController extends Controller
     public function getExpandedTeamData($team_id)
     {
         try {
-            $team = SleeperTeam::find($team_id);
-            $player_array = $team->getTeamPlayers();
-            $team->players = json_encode($player_array);
-
-            $pos_array = [];
-            foreach($player_array as $player)
+            $team_data = json_decode(Redis::get("expandedteam:".$team_id));
+            if (empty($team_data))
             {
-                if ($player->position == "K")
-                {
-                    unset($player);
-                    continue;
-                }
-                if (!isset($pos_array[$player->position]))
-                {
-                    $pos_array[$player->position] = [];
-                }
-                $pos_array[$player->position][] = $player;
+                $team = SleeperTeam::find($team_id);
+                $team_data = $team->getExpandedTeamData();
+
+                Redis::set("expandedteam:".$team_id, json_encode($team_data));
             }
-            $team->pos_array = json_encode($pos_array);
-
-            $team_value = $team->getTeamValue();
-
-            $picks = SleeperDraftPick::where('team_id',$team->id)->orderby('round','asc')->get();
-            $team->draft_picks = json_encode($picks);
-
-            $draftValue = SleeperTeam::computeDraftValue($picks);
-            $team_value["draft"] = $draftValue;
-            $team_value["total"]["value"] += $team_value["draft"]["total"]["value"];
-            $team->value = json_encode($team_value);
+            
         } catch(Throwable $e) {
             Log::error($e);
             return [
@@ -67,7 +48,7 @@ class TeamController extends Controller
 
         return [
             "success" => true,
-            "team" => $team
+            "team" => $team_data
         ];
     }
 }
